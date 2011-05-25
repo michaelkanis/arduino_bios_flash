@@ -52,7 +52,7 @@ void setup() {
 
 #ifndef DEBUG
 
-  SPCR = (1<<SPE) | (1<<MSTR) | (0<<SPR1) | (0<<SPR0);
+  SPCR = (1<<SPE) | (1<<MSTR) | (1<<SPR1) | (1<<SPR0);
 
   // clear the status and data registers
   clr = SPSR;
@@ -106,7 +106,6 @@ void readEeprom() {
   byte buffer[BUFFER_SIZE];
   unsigned long address;
   for (address = LOW_ADDRESS; address <= HIGH_ADDRESS; address = address + BUFFER_SIZE) {
-    delay(100);
     readBuffer(address, buffer);
     Serial.write(buffer, BUFFER_SIZE);
   }
