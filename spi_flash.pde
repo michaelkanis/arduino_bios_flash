@@ -32,10 +32,6 @@
 // speed
 #define SERIAL_SPEED 115200
 
-#define NONE 0;
-
-byte activeOperation = NONE;
-
 void setup() {
   // this is just a dummy variable
   byte clr;
@@ -91,10 +87,10 @@ void loop() {
     incomingByte = Serial.read();
   
     switch (incomingByte) {
-      case 0x03:
+      case READ:
         readEeprom();
         break;
-      case 0x20:
+      case 0x20: // should be SE, but this doesn't work for some reason
         eraseSector(LOW_ADDRESS);
         break;
       default:
