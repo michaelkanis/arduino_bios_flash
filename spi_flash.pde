@@ -23,7 +23,7 @@
 // we shift this byte to the SPDR in order to receive a byte from the chip
 #define DUMMY 0x00
 
-// minimal performance timings
+// minimum performance timings
 #define SECTOR_ERASE_TIME 300
 #define BLOCK_ERASE_TIME 2000
 #define CHIP_ERASE_TIME 15000
@@ -32,8 +32,9 @@
 
 // start and end addresses
 #define LOW_ADDRESS  0x00000000
-#define HIGH_ADDRESS 0x00000fff
+#define HIGH_ADDRESS 0x000fffff
 
+#define PAGE_SIZE 256
 // should be a divisor of the memory area size, we will read
 // this could be higher than 256, but then some terminal programs
 // on my PC lose bytes, it seems
@@ -63,7 +64,7 @@ void setup() {
 
 #ifndef DEBUG
 
-  SPCR = (1<<SPE) | (1<<MSTR) | (1<<SPR1) | (1<<SPR0);
+  SPCR = (1<<SPE) | (1<<MSTR) | (0<<SPR1) | (0<<SPR0);
 
   // clear the status and data registers
   clr = SPSR;
@@ -116,8 +117,9 @@ void loop() {
       case REMS:
         readManufacturerId();
         break;
-      default:
-        Serial.write(incomingByte);
+      case PAPR:
+        programPage();
+        break;
     }
   }
   
@@ -145,9 +147,7 @@ void readBuffer(unsigned long address, byte *buffer) {
   //transmit read opcode
   spi_transfer(READ);
 
-  spi_transfer((byte)(address>>16));
-  spi_transfer((byte)(address>>8));
-  spi_transfer((byte)(address));
+  transferAddress(address);  
   
   for (i = 0; i < BUFFER_SIZE; i++) {
     // get data byte; transfer dummy byte
@@ -156,6 +156,73 @@ void readBuffer(unsigned long address, byte *buffer) {
   
   // release chip, signal transfer end
   deselect_chip();
+}
+
+void programChip() {
+//  Serial.println("programChip");
+  
+  byte page[PAGE_SIZE];
+  unsigned long address;
+  
+  for (address = LOW_ADDRESS; address <= HIGH_ADDRESS; address = address + PAGE_SIZE) {
+    for (int i = 0; i < PAGE_SIZE; ) {
+      if (Serial.available() > 0) {
+        page[i++] = Serial.read();
+      }
+    }
+  
+    //programPage(address, page);
+    readStatus();
+  }
+}
+
+void programPage() {
+ 
+  unsigned long address = 0;
+  byte page[PAGE_SIZE];
+
+  for (int i = 2; i >= 0; ) {
+    if (Serial.available() > 0) {
+      long b = Serial.read();
+//      Serial.write(b);
+      address = address + (b << (i * 8));
+      i--;
+    }
+  }
+
+//  Serial.print("address: ");
+//  Serial.println(address, DEC);
+
+  for (int i = 0; i < PAGE_SIZE; ) {
+    if (Serial.available() > 0) {
+      byte b = Serial.read();
+      //Serial.write(b);
+      page[i++] = b;
+    }
+  }
+
+#if 1
+  enableWrite();
+  select_chip();
+  
+  // send page program command
+  spi_transfer(PAPR);
+  
+  // send address
+  transferAddress(address);  
+  
+  // send data
+  for (int i = 0; i < PAGE_SIZE; i++) {
+    // get data byte; transfer dummy byte
+    spi_transfer(page[i]);
+  }
+  
+  deselect_chip();
+#endif
+
+  delay(PAGE_PROGRAM_TIME);
+  
+  readStatus();
 }
 
 void readStatus() {
@@ -201,12 +268,9 @@ void eraseSector(unsigned long address) {
   
   spi_transfer(SCTE);
   
-  spi_transfer((byte)(address>>16));
-  spi_transfer((byte)(address>>8));
-  spiWrite((byte)(address));
-  deselect_chip();
+  transferAddress(address);  
 
-  //Serial.write(spiRead());
+  deselect_chip();
 
   readStatus();
 
@@ -223,10 +287,8 @@ void eraseBlock(unsigned long address) {
   select_chip();
   
   spi_transfer(BLKE);
-  
-  spi_transfer((byte)(address>>16));
-  spi_transfer((byte)(address>>8));
-  spi_transfer((byte)(address));
+
+  transferAddress(address);  
 
   deselect_chip();
 
@@ -237,13 +299,19 @@ void eraseBlock(unsigned long address) {
   readStatus();
 }
 
+void transferAddress(unsigned long address) {
+  spi_transfer((byte)(address>>16));
+  spi_transfer((byte)(address>>8));
+  spi_transfer((byte)(address));
+}
+
 void eraseChip() {
   readStatus();
   enableWrite();
   readStatus();
   
   select_chip();
-  spiWrite(CHPE);
+  spi_transfer(CHPE);
   deselect_chip();
 
   readStatus();
